@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
                             append("数据组：${it.dataGroups.entries.joinToString { group -> "${group.key} ${group.value}B" }}")
                             if (it.declaredDataGroups.isNotEmpty()) append("\n芯片声明的数据组：${it.declaredDataGroups.joinToString { number -> "DG$number" }}")
                             if (request.documentType == DocumentType.HK_MACAO_PERMIT && "DG12" !in it.dataGroups) {
-                                append("\n标准 LDS 中未包含签注；双程证签注位于非 LDS 的专用数据文件或应用中。")
+                                append("\n本次通过标准 ICAO LDS 未读取到签注；签注可能位于受控的专用数据文件、卡内应用或服务端解码结果中。")
                             }
                         }
                         pendingNfcRequest = null

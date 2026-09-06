@@ -14,6 +14,7 @@ import org.jmrtd.lds.icao.DG1File
 import org.jmrtd.lds.icao.DG11File
 import org.jmrtd.lds.icao.DG12File
 import org.jmrtd.lds.icao.COMFile
+import org.jmrtd.lds.SODFile
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
@@ -49,13 +50,17 @@ class IcaoChipReader : TravelDocumentChipReader {
                 }
                 update(NfcReadState(NfcStage.LDS_READING, "正在读取身份数据"))
                 val dg1Bytes = service.getInputStream(PassportService.EF_DG1).readFully()
-                val declaredGroups = readOptional(service, PassportService.EF_COM)?.let { bytes ->
+                val comDeclaredGroups = readOptional(service, PassportService.EF_COM)?.let { bytes ->
                     runCatching { COMFile(ByteArrayInputStream(bytes)).tagList.map(org.jmrtd.lds.LDSFileUtil::lookupDataGroupNumberByTag) }.getOrNull()
                 }.orEmpty()
                 val dg2Bytes = readOptional(service, PassportService.EF_DG2)
                 val dg11Bytes = readOptional(service, PassportService.EF_DG11)
                 val dg12Bytes = readOptional(service, PassportService.EF_DG12)
                 val sodBytes = readOptional(service, PassportService.EF_SOD)
+                val sodDeclaredGroups = sodBytes?.let { bytes ->
+                    runCatching { SODFile(ByteArrayInputStream(bytes)).dataGroupHashes.keys.sorted() }.getOrNull()
+                }.orEmpty()
+                val declaredGroups = (comDeclaredGroups + sodDeclaredGroups).distinct().sorted()
                 val fields = parseFields(request, dg1Bytes, dg11Bytes, dg12Bytes)
                 val groups = linkedMapOf("DG1" to dg1Bytes.size).apply {
                     dg2Bytes?.let { put("DG2", it.size) }
