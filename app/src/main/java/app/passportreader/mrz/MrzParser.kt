@@ -46,6 +46,13 @@ object MrzParser {
         return parseTd1(text)
     }
 
+    fun diagnosis(text: String): String {
+        val td3 = parseTd3(text).exceptionOrNull()?.message ?: "TD3 通过"
+        val td1 = parseTd1(text).exceptionOrNull()?.message ?: "TD1 通过"
+        val lengths = text.lines().map(::normalizeOcrLine).filter(String::isNotBlank).map(String::length)
+        return "$td3；$td1；识别行长度=${lengths.joinToString()}"
+    }
+
     fun parseTd1(text: String): Result<MrzAccessKey> = runCatching {
         val lines = text.lines()
             .map(::normalizeOcrLine)

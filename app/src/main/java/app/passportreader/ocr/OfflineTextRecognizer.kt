@@ -17,7 +17,7 @@ class OfflineTextRecognizer {
     private val chinese = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
 
     suspend fun recognize(bitmap: Bitmap): OcrText {
-        val lowerStart = (bitmap.height * 0.52f).toInt()
+        val lowerStart = (bitmap.height * 0.62f).toInt()
         val lower = Bitmap.createBitmap(bitmap, 0, lowerStart, bitmap.width, bitmap.height - lowerStart)
         val lowerScale = (1800f / lower.width).coerceAtLeast(1f).coerceAtMost(2f)
         val enlargedLower = if (lowerScale > 1f) Bitmap.createScaledBitmap(lower, (lower.width * lowerScale).toInt(), (lower.height * lowerScale).toInt(), true) else lower

@@ -9,12 +9,15 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -49,6 +52,22 @@ fun CameraCaptureScreen(onRecognized: (String) -> Unit, onCancel: () -> Unit, on
                 }.onFailure { onError("无法启动相机：${it.message}") } }, ContextCompat.getMainExecutor(ctx))
             }
         }, modifier = Modifier.fillMaxSize())
+        Box(
+            Modifier
+                .fillMaxWidth(0.9f)
+                .aspectRatio(1.586f)
+                .align(Alignment.Center)
+                .border(3.dp, Color(0xFF70E1B1), RoundedCornerShape(14.dp))
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.34f)
+                    .align(Alignment.BottomCenter)
+                    .border(2.dp, Color(0xFFFFD166), RectangleShape)
+            )
+            Text("将证件边缘对齐绿色框\n机读码放入黄色区域", color = Color.White, modifier = Modifier.align(Alignment.TopCenter).padding(10.dp))
+        }
         TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) { Text("取消", color = Color.White) }
         Card(Modifier.align(Alignment.BottomCenter).padding(20.dp)) { Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(if (busy) "正在离线识别…" else "保持证件平整，避免反光"); Spacer(Modifier.height(10.dp))
@@ -64,13 +83,27 @@ private fun captureAndRecognize(context: Context, capture: ImageCapture, recogni
     capture.takePicture(ImageCapture.OutputFileOptions.Builder(temporary).build(), ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
         override fun onImageSaved(result: ImageCapture.OutputFileResults) {
             kotlinx.coroutines.MainScope().launch {
-                try { onRecognized(recognizer.recognize(loadUprightBitmap(temporary)).text) }
+                try {
+                    val upright = loadUprightBitmap(temporary)
+                    val document = cropDocumentFrame(upright)
+                    onRecognized(recognizer.recognize(document).text)
+                    if (document !== upright) document.recycle()
+                    upright.recycle()
+                }
                 catch (error: Exception) { onError("识别失败：${error.message}") }
                 finally { temporary.delete() }
             }
         }
         override fun onError(error: ImageCaptureException) { temporary.delete(); onError("拍摄失败：${error.message}") }
     })
+}
+
+private fun cropDocumentFrame(bitmap: Bitmap): Bitmap {
+    val width = (bitmap.width * 0.9f).toInt()
+    val height = (width / 1.586f).toInt().coerceAtMost((bitmap.height * 0.9f).toInt())
+    val left = (bitmap.width - width) / 2
+    val top = (bitmap.height - height) / 2
+    return Bitmap.createBitmap(bitmap, left, top, width, height)
 }
 
 private fun loadUprightBitmap(file: File): Bitmap {

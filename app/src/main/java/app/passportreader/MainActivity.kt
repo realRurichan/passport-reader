@@ -131,7 +131,8 @@ private fun DocumentScreen(type: DocumentType, nfcState: NfcReadState, chipSumma
                 accessKey = key
             }
             if (MrzParser.parseAccessKey(text).isFailure) accessKey = null
-            message = if (accessKey != null) "机读码校验通过，可以直接读取芯片" else "机读码未通过 TD1/TD3 校验，请重新拍摄"
+            message = if (accessKey != null) "机读码校验通过，可以直接读取芯片"
+            else "机读码校验失败：${MrzParser.diagnosis(text)}"
             showCamera = false
         }, onCancel = { showCamera = false }, onError = { message = it; showCamera = false })
         return
