@@ -1,7 +1,10 @@
 package io.github.realrurichan.passportreader
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.util.Size
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -16,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.realrurichan.passportreader.ocr.OfflineTextRecognizer
 import java.io.File
@@ -27,7 +31,12 @@ fun CameraCaptureScreen(onRecognized: (String) -> Unit, onCancel: () -> Unit, on
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val recognizer = remember { OfflineTextRecognizer() }
-    val capture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build() }
+    val capture = remember {
+        ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .setTargetResolution(Size(2560, 1440))
+            .build()
+    }
     var busy by remember { mutableStateOf(false) }
     DisposableEffect(Unit) { onDispose { recognizer.close() } }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -55,11 +64,25 @@ private fun captureAndRecognize(context: Context, capture: ImageCapture, recogni
     capture.takePicture(ImageCapture.OutputFileOptions.Builder(temporary).build(), ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
         override fun onImageSaved(result: ImageCapture.OutputFileResults) {
             kotlinx.coroutines.MainScope().launch {
-                try { onRecognized(recognizer.recognize(requireNotNull(BitmapFactory.decodeFile(temporary.absolutePath))).text) }
+                try { onRecognized(recognizer.recognize(loadUprightBitmap(temporary)).text) }
                 catch (error: Exception) { onError("识别失败：${error.message}") }
                 finally { temporary.delete() }
             }
         }
         override fun onError(error: ImageCaptureException) { temporary.delete(); onError("拍摄失败：${error.message}") }
     })
+}
+
+private fun loadUprightBitmap(file: File): Bitmap {
+    val source = requireNotNull(BitmapFactory.decodeFile(file.absolutePath))
+    val orientation = ExifInterface(file).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    val degrees = when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+        else -> 0f
+    }
+    if (degrees == 0f) return source
+    return Bitmap.createBitmap(source, 0, 0, source.width, source.height, Matrix().apply { postRotate(degrees) }, true)
+        .also { if (it !== source) source.recycle() }
 }

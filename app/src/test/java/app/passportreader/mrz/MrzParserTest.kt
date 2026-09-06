@@ -16,4 +16,9 @@ class MrzParserTest {
 
     @Test fun computesCheckDigit() = assertEquals('6', MrzParser.checkDigit("L898902C3"))
     @Test fun rejectsBadCheckDigit() = assertTrue(MrzParser.parseTd3(sample.replace("C36", "C30")).isFailure)
+
+    @Test fun correctsCommonOcrLettersInNumericZones() {
+        val noisy = sample.replace("1204159", "12O4159")
+        assertTrue(MrzParser.parseTd3(noisy).isSuccess)
+    }
 }

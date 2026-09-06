@@ -18,10 +18,13 @@ object MrzParser {
     private val weights = intArrayOf(7, 3, 1)
 
     fun parseTd3(text: String): Result<MrzResult> = runCatching {
-        val lines = text.lines().map { it.replace(" ", "").uppercase() }.filter { it.length >= 44 }
+        val lines = text.lines()
+            .map(::normalizeOcrLine)
+            .filter { it.length >= 40 }
+            .map { it.take(44).padEnd(44, '<') }
         require(lines.size >= 2) { "需要两行 44 字符的 TD3 MRZ" }
         val first = lines[0].take(44)
-        val second = lines[1].take(44)
+        val second = normalizeNumericZones(lines[1].take(44))
         val number = second.substring(0, 9)
         val birth = second.substring(13, 19)
         val expiry = second.substring(21, 27)
@@ -36,6 +39,28 @@ object MrzParser {
             second.substring(10, 13),
             second[20],
         )
+    }
+
+    private fun normalizeOcrLine(line: String): String = line.uppercase()
+        .replace('«', '<')
+        .replace('〈', '<')
+        .filter { it in 'A'..'Z' || it in '0'..'9' || it == '<' }
+
+    private fun normalizeNumericZones(line: String): String {
+        val chars = line.toCharArray()
+        val numericPositions = (13..19) + (21..27) + listOf(9)
+        numericPositions.forEach { index -> if (index < chars.size) chars[index] = ocrDigit(chars[index]) }
+        return chars.concatToString()
+    }
+
+    private fun ocrDigit(value: Char): Char = when (value) {
+        'O', 'Q', 'D' -> '0'
+        'I', 'L' -> '1'
+        'Z' -> '2'
+        'S' -> '5'
+        'G' -> '6'
+        'B' -> '8'
+        else -> value
     }
 
     fun valid(value: String, expected: Char): Boolean = checkDigit(value) == expected

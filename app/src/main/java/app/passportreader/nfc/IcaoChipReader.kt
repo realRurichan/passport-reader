@@ -2,6 +2,7 @@ package io.github.realrurichan.passportreader.nfc
 
 import android.nfc.Tag
 import android.nfc.tech.IsoDep
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.sf.scuba.smartcards.CardService
@@ -19,6 +20,7 @@ class IcaoChipReader : TravelDocumentChipReader {
     override suspend fun read(tag: Tag, request: NfcReadRequest, update: (NfcReadState) -> Unit) =
         withContext(Dispatchers.IO) {
             val isoDep = requireNotNull(IsoDep.get(tag)) { "芯片不支持 ISO-DEP" }
+            Log.i("DocumentNfc", "tag detected type=${request.documentType.name} tech=${tag.techList.joinToString()}")
             update(NfcReadState(NfcStage.TAG_DETECTED, "已发现芯片"))
             val cardService = CardService.getInstance(isoDep)
             val service = PassportService(cardService, 256, 224, false, false)
@@ -50,6 +52,7 @@ class IcaoChipReader : TravelDocumentChipReader {
                 update(NfcReadState(NfcStage.COMPLETE, "芯片读取完成", protocol))
                 result
             } catch (error: Exception) {
+                Log.w("DocumentNfc", "read failed stage=${request.documentType.name} error=${error.javaClass.simpleName}")
                 update(NfcReadState(NfcStage.FAILED, "无法读取芯片", protocol, error.message))
                 throw error
             } finally {
