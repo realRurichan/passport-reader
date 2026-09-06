@@ -21,4 +21,12 @@ class MrzParserTest {
         val noisy = sample.replace("1204159", "12O4159")
         assertTrue(MrzParser.parseTd3(noisy).isSuccess)
     }
+
+    @Test fun parsesTd1AccessKey() {
+        val td1 = "I<UTOD231458907<<<<<<<<<<<<<<<\n7408122F1204159UTO<<<<<<<<<<<6\nERIKSSON<<ANNA<MARIA<<<<<<<<<<"
+        val key = MrzParser.parseTd1(td1).getOrThrow()
+        assertEquals("D23145890", key.documentNumber)
+        assertEquals("740812", key.birthDate)
+        assertEquals("120415", key.expiryDate)
+    }
 }

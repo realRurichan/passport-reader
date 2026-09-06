@@ -41,6 +41,30 @@ object MrzParser {
         )
     }
 
+    fun parseAccessKey(text: String): Result<MrzAccessKey> {
+        parseTd3(text).getOrNull()?.let { return Result.success(it.accessKey) }
+        return parseTd1(text)
+    }
+
+    fun parseTd1(text: String): Result<MrzAccessKey> = runCatching {
+        val lines = text.lines()
+            .map(::normalizeOcrLine)
+            .filter { it.length in 27..36 }
+            .map { it.take(30).padEnd(30, '<') }
+        require(lines.size >= 3) { "需要三行 30 字符的 TD1 MRZ" }
+        val first = lines.windowed(3).firstOrNull { it[0].length == 30 && it[1].length == 30 }
+            ?: error("未找到 TD1 MRZ")
+        val line1 = normalizeTd1DocumentLine(first[0])
+        val line2 = normalizeTd1DateLine(first[1])
+        val documentNumber = line1.substring(5, 14)
+        val birthDate = line2.substring(0, 6)
+        val expiryDate = line2.substring(8, 14)
+        require(valid(documentNumber, line1[14])) { "证件号码校验位错误" }
+        require(valid(birthDate, line2[6])) { "出生日期校验位错误" }
+        require(valid(expiryDate, line2[14])) { "有效期校验位错误" }
+        MrzAccessKey(documentNumber.replace("<", ""), birthDate, expiryDate)
+    }
+
     private fun normalizeOcrLine(line: String): String = line.uppercase()
         .replace('«', '<')
         .replace('〈', '<')
@@ -50,6 +74,18 @@ object MrzParser {
         val chars = line.toCharArray()
         val numericPositions = (13..19) + (21..27) + listOf(9)
         numericPositions.forEach { index -> if (index < chars.size) chars[index] = ocrDigit(chars[index]) }
+        return chars.concatToString()
+    }
+
+    private fun normalizeTd1DocumentLine(line: String): String {
+        val chars = line.toCharArray()
+        if (chars.size > 14) chars[14] = ocrDigit(chars[14])
+        return chars.concatToString()
+    }
+
+    private fun normalizeTd1DateLine(line: String): String {
+        val chars = line.toCharArray()
+        ((0..6) + (8..14)).forEach { if (it < chars.size) chars[it] = ocrDigit(chars[it]) }
         return chars.concatToString()
     }
 

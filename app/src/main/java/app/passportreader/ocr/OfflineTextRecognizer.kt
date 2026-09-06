@@ -17,16 +17,26 @@ class OfflineTextRecognizer {
     private val chinese = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
 
     suspend fun recognize(bitmap: Bitmap): OcrText {
-        val image = InputImage.fromBitmap(bitmap, 0)
-        val results = listOf(latin, chinese).map { recognizer ->
+        val lowerStart = (bitmap.height * 0.52f).toInt()
+        val lower = Bitmap.createBitmap(bitmap, 0, lowerStart, bitmap.width, bitmap.height - lowerStart)
+        val lowerScale = (1800f / lower.width).coerceAtLeast(1f).coerceAtMost(2f)
+        val enlargedLower = if (lowerScale > 1f) Bitmap.createScaledBitmap(lower, (lower.width * lowerScale).toInt(), (lower.height * lowerScale).toInt(), true) else lower
+        val jobs = listOf(
+            latin to InputImage.fromBitmap(enlargedLower, 0),
+            latin to InputImage.fromBitmap(bitmap, 0),
+            chinese to InputImage.fromBitmap(bitmap, 0),
+        )
+        val results = jobs.map { (recognizer, image) ->
             suspendCancellableCoroutine { continuation ->
                 recognizer.process(image)
                     .addOnSuccessListener { continuation.resume(it) }
                     .addOnFailureListener { continuation.resumeWithException(it) }
             }
         }
-        val lines = results.flatMap { it.textBlocks }.distinctBy { it.text }
-        return OcrText(lines.joinToString("\n") { it.text }, lines.map { OcrBlock(it.text, null) })
+        val texts = results.map { it.text.trim() }.filter(String::isNotBlank).distinct()
+        if (enlargedLower !== lower) enlargedLower.recycle()
+        lower.recycle()
+        return OcrText(texts.joinToString("\n"), texts.map { OcrBlock(it, null) })
     }
 
     fun close() { latin.close(); chinese.close() }

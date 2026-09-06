@@ -127,10 +127,10 @@ private fun DocumentScreen(type: DocumentType, nfcState: NfcReadState, chipSumma
     if (showCamera) {
         CameraCaptureScreen(onRecognized = { text ->
             ocrText = text
-            MrzParser.parseTd3(text).onSuccess { result ->
-                documentNumber = result.accessKey.documentNumber; birthDate = result.accessKey.birthDate; expiryDate = result.accessKey.expiryDate
+            MrzParser.parseAccessKey(text).onSuccess { key ->
+                documentNumber = key.documentNumber; birthDate = key.birthDate; expiryDate = key.expiryDate
             }
-            message = if (MrzParser.parseTd3(text).isSuccess) "MRZ 校验通过，已填入 NFC 密钥" else "已完成 OCR；请人工校对 NFC 密钥"
+            message = if (MrzParser.parseAccessKey(text).isSuccess) "MRZ 校验通过，已填入 NFC 密钥" else "已完成 OCR；未通过 TD1/TD3 校验，请人工校对"
             showCamera = false
         }, onCancel = { showCamera = false }, onError = { message = it; showCamera = false })
         return
