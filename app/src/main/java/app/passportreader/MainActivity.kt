@@ -75,7 +75,10 @@ class MainActivity : ComponentActivity() {
                             appendLine("协议：${it.protocol}")
                             it.fields.forEach { (label, value) -> appendLine("$label：$value") }
                             append("数据组：${it.dataGroups.entries.joinToString { group -> "${group.key} ${group.value}B" }}")
-                            if ("DG12" !in it.dataGroups) append("\n未发现可访问的 DG12，芯片签注可能不使用标准 LDS DG12。")
+                            if (it.declaredDataGroups.isNotEmpty()) append("\n芯片声明的数据组：${it.declaredDataGroups.joinToString { number -> "DG$number" }}")
+                            if (request.documentType == DocumentType.HK_MACAO_PERMIT && "DG12" !in it.dataGroups) {
+                                append("\n标准 LDS 中未包含签注；双程证签注位于非 LDS 的专用数据文件或应用中。")
+                            }
                         }
                         pendingNfcRequest = null
                     }

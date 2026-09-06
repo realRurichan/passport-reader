@@ -28,4 +28,5 @@ data class ChipReadResult(
     val protocol: String,
     val fields: Map<String, String>,
     val dataGroups: Map<String, Int>,
+    val declaredDataGroups: List<Int>,
 )

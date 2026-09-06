@@ -13,6 +13,7 @@ import org.jmrtd.lds.PACEInfo
 import org.jmrtd.lds.icao.DG1File
 import org.jmrtd.lds.icao.DG11File
 import org.jmrtd.lds.icao.DG12File
+import org.jmrtd.lds.icao.COMFile
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
@@ -48,18 +49,21 @@ class IcaoChipReader : TravelDocumentChipReader {
                 }
                 update(NfcReadState(NfcStage.LDS_READING, "正在读取身份数据"))
                 val dg1Bytes = service.getInputStream(PassportService.EF_DG1).readFully()
+                val declaredGroups = readOptional(service, PassportService.EF_COM)?.let { bytes ->
+                    runCatching { COMFile(ByteArrayInputStream(bytes)).tagList.map(org.jmrtd.lds.LDSFileUtil::lookupDataGroupNumberByTag) }.getOrNull()
+                }.orEmpty()
                 val dg2Bytes = readOptional(service, PassportService.EF_DG2)
                 val dg11Bytes = readOptional(service, PassportService.EF_DG11)
                 val dg12Bytes = readOptional(service, PassportService.EF_DG12)
                 val sodBytes = readOptional(service, PassportService.EF_SOD)
-                val fields = parseFields(dg1Bytes, dg11Bytes, dg12Bytes)
+                val fields = parseFields(request, dg1Bytes, dg11Bytes, dg12Bytes)
                 val groups = linkedMapOf("DG1" to dg1Bytes.size).apply {
                     dg2Bytes?.let { put("DG2", it.size) }
                     dg11Bytes?.let { put("DG11", it.size) }
                     dg12Bytes?.let { put("DG12", it.size) }
                     sodBytes?.let { put("SOD", it.size) }
                 }
-                val result = ChipReadResult(dg1Bytes, dg2Bytes, sodBytes, protocol, fields, groups)
+                val result = ChipReadResult(dg1Bytes, dg2Bytes, sodBytes, protocol, fields, groups, declaredGroups)
                 update(NfcReadState(NfcStage.COMPLETE, "芯片读取完成", protocol))
                 result
             } catch (error: Exception) {
@@ -76,24 +80,32 @@ class IcaoChipReader : TravelDocumentChipReader {
 private fun readOptional(service: PassportService, fileId: Short): ByteArray? =
     runCatching { service.getInputStream(fileId).readFully() }.getOrNull()
 
-private fun parseFields(dg1: ByteArray, dg11: ByteArray?, dg12: ByteArray?): Map<String, String> = linkedMapOf<String, String>().apply {
-    val mrz = DG1File(ByteArrayInputStream(dg1)).mrzInfo
-    putIfNotBlank("姓名", mrz.nameOfHolder.replace('<', ' '))
-    putIfNotBlank("姓", mrz.primaryIdentifier.replace('<', ' '))
-    putIfNotBlank("名", mrz.secondaryIdentifier.replace('<', ' '))
-    putIfNotBlank("证件号码", mrz.documentNumber.replace("<", ""))
-    putIfNotBlank("出生日期", mrz.dateOfBirth)
-    putIfNotBlank("有效期", mrz.dateOfExpiry)
-    putIfNotBlank("性别", mrz.gender.toString())
-    putIfNotBlank("国籍", mrz.nationality)
-    putIfNotBlank("签发国家/地区", mrz.issuingState)
-    putIfNotBlank("个人号码", mrz.personalNumber?.replace("<", ""))
+private fun parseFields(request: NfcReadRequest, dg1: ByteArray, dg11: ByteArray?, dg12: ByteArray?): Map<String, String> = linkedMapOf<String, String>().apply {
+    if (request.documentType == io.github.realrurichan.passportreader.model.DocumentType.PASSPORT) {
+        val mrz = DG1File(ByteArrayInputStream(dg1)).mrzInfo
+        putIfNotBlank("姓名", mrz.nameOfHolder.replace('<', ' '))
+        putIfNotBlank("姓", mrz.primaryIdentifier.replace('<', ' '))
+        putIfNotBlank("名", mrz.secondaryIdentifier.replace('<', ' '))
+        putIfNotBlank("证件号码", mrz.documentNumber.replace("<", ""))
+        putIfNotBlank("出生日期", mrz.dateOfBirth)
+        putIfNotBlank("有效期", mrz.dateOfExpiry)
+        putIfNotBlank("性别", mrz.gender.toString())
+        putIfNotBlank("国籍", mrz.nationality)
+        putIfNotBlank("签发国家/地区", mrz.issuingState)
+        putIfNotBlank("个人号码", mrz.personalNumber?.replace("<", ""))
+    } else {
+        put("证件号码", request.accessKey.documentNumber)
+        put("出生日期", request.accessKey.birthDate)
+        put("有效期", request.accessKey.expiryDate)
+    }
     dg11?.let { bytes -> runCatching { DG11File(ByteArrayInputStream(bytes)) }.getOrNull()?.let { file ->
         putIfNotBlank("完整姓名", file.nameOfHolder)
         putIfNotBlank("完整出生日期", file.fullDateOfBirth)
         putIfNotBlank("出生地", file.placeOfBirth?.joinToString(" / "))
-        putIfNotBlank("补充个人号码", file.personalNumber)
-        putIfNotBlank("其他有效证件号", file.otherValidTDNumbers?.joinToString(" / "))
+        if (request.documentType == io.github.realrurichan.passportreader.model.DocumentType.PASSPORT) {
+            putIfNotBlank("补充个人号码", file.personalNumber)
+            putIfNotBlank("其他有效证件号", file.otherValidTDNumbers?.joinToString(" / "))
+        }
     } }
     dg12?.let { bytes -> runCatching { DG12File(ByteArrayInputStream(bytes)) }.getOrNull()?.let { file ->
         putIfNotBlank("签发机关", file.issuingAuthority)
