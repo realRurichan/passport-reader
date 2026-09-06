@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.realrurichan.passportreader"
+    namespace = "io.github.realrurichan.twowaypermitreader"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.realrurichan.passportreader"
+        applicationId = "io.github.realrurichan.twowaypermitreader"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

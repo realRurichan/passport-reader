@@ -8,3 +8,8 @@
 .cxx/
 app/build/
 
+
+# PC-side probe artifacts (permit data dumps and build outputs)
+tools/pc-reader/out/
+tools/pc-reader/dump/
+tools/pc-reader/probe/

@@ -1,4 +1,4 @@
-package io.github.realrurichan.passportreader
+package io.github.realrurichan.twowaypermitreader
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -24,7 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import io.github.realrurichan.passportreader.ocr.OfflineTextRecognizer
+import io.github.realrurichan.twowaypermitreader.ocr.OfflineTextRecognizer
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -33,11 +33,14 @@ fun CameraCaptureScreen(singleLineMrz: Boolean, onRecognized: (String) -> Unit, 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
-    val recognizer = remember { OfflineTextRecognizer() }
+    val recognizer = remember {
+        OfflineTextRecognizer().also { recognizer ->
+            recognizer.debugDump = { bitmap, name -> debugDump(context, bitmap, name) }
+        }
+    }
     val capture = remember {
         ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-            .setTargetResolution(Size(2560, 1440))
             .build()
     }
     var busy by remember { mutableStateOf(false) }
@@ -45,10 +48,14 @@ fun CameraCaptureScreen(singleLineMrz: Boolean, onRecognized: (String) -> Unit, 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { ctx ->
             PreviewView(ctx).also { view ->
+                view.scaleType = PreviewView.ScaleType.FIT_CENTER
                 val future = ProcessCameraProvider.getInstance(ctx)
                 future.addListener({ runCatching {
-                    val provider = future.get(); val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
-                    provider.unbindAll(); provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+                    val provider = future.get()
+                    val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
+                    val viewPort = ViewPort.Builder(android.util.Rational(1586, 1000), view.display.rotation).build()
+                    val group = UseCaseGroup.Builder().addUseCase(preview).addUseCase(capture).setViewPort(viewPort).build()
+                    provider.unbindAll(); provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, group)
                 }.onFailure { onError("无法启动相机：${it.message}") } }, ContextCompat.getMainExecutor(ctx))
             }
         }, modifier = Modifier.fillMaxSize())
@@ -68,17 +75,17 @@ fun CameraCaptureScreen(singleLineMrz: Boolean, onRecognized: (String) -> Unit, 
             )
             Text("将证件边缘对齐绿色框\n${if (singleLineMrz) "单行机读码" else "机读码"}放入黄色区域", color = Color.White, modifier = Modifier.align(Alignment.TopCenter).padding(10.dp))
         }
-        TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) { Text("取消", color = Color.White) }
-        Card(Modifier.align(Alignment.BottomCenter).padding(20.dp)) { Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp)) { Text("取消", color = Color.White) }
+        Card(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(20.dp)) { Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(if (busy) "正在离线识别…" else "保持证件平整，避免反光"); Spacer(Modifier.height(10.dp))
             Button(enabled = !busy, onClick = {
-                busy = true; captureAndRecognize(context, capture, recognizer, onRecognized, onError)
+                busy = true; captureAndRecognize(context, capture, recognizer, singleLineMrz, onRecognized, onError)
             }) { Text("拍摄") }
         } }
     }
 }
 
-private fun captureAndRecognize(context: Context, capture: ImageCapture, recognizer: OfflineTextRecognizer, onRecognized: (String) -> Unit, onError: (String) -> Unit) {
+private fun captureAndRecognize(context: Context, capture: ImageCapture, recognizer: OfflineTextRecognizer, singleLineMrz: Boolean, onRecognized: (String) -> Unit, onError: (String) -> Unit) {
     val temporary = File.createTempFile("document-", ".jpg", context.cacheDir)
     capture.takePicture(ImageCapture.OutputFileOptions.Builder(temporary).build(), ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
         override fun onImageSaved(result: ImageCapture.OutputFileResults) {
@@ -86,7 +93,8 @@ private fun captureAndRecognize(context: Context, capture: ImageCapture, recogni
                 try {
                     val upright = loadUprightBitmap(temporary)
                     val document = cropDocumentFrame(upright)
-                    onRecognized(recognizer.recognize(document).text)
+                    debugDump(context, document, "crop.png")
+                    onRecognized(recognizer.recognize(document, if (singleLineMrz) 0.16f else 0.34f).text)
                     if (document !== upright) document.recycle()
                     upright.recycle()
                 }
@@ -96,6 +104,14 @@ private fun captureAndRecognize(context: Context, capture: ImageCapture, recogni
         }
         override fun onError(error: ImageCaptureException) { temporary.delete(); onError("拍摄失败：${error.message}") }
     })
+}
+
+private fun debugDump(context: Context, bitmap: Bitmap, name: String) {
+    runCatching {
+        java.io.File(context.cacheDir, name).outputStream().use { output ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+        }
+    }
 }
 
 private fun cropDocumentFrame(bitmap: Bitmap): Bitmap {

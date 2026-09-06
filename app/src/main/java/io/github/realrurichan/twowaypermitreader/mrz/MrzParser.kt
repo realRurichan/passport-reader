@@ -1,4 +1,4 @@
-package io.github.realrurichan.passportreader.mrz
+package io.github.realrurichan.twowaypermitreader.mrz
 
 data class MrzAccessKey(
     val documentNumber: String,

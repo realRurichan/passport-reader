@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">证件读取器</string>
+    <string name="app_name">双程证读取器</string>
     <string name="privacy_note">全部在本机处理，默认不保存证件资料</string>
 </resources>
 

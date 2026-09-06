@@ -5,6 +5,6 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories { google(); mavenCentral() }
 }
-rootProject.name = "passport-reader"
+rootProject.name = "two-way-permit-reader"
 include(":app")
 

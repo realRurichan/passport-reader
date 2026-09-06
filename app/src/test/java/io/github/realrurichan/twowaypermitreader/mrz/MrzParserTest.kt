@@ -1,4 +1,4 @@
-package io.github.realrurichan.passportreader.mrz
+package io.github.realrurichan.twowaypermitreader.mrz
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
