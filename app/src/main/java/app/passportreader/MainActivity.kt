@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.Lock
@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -72,9 +71,12 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch {
                 runCatching { chipReader.read(tag, request) { runOnUiThread { nfcState = it } } }
                     .onSuccess {
-                        chipSummary = "${it.protocol} · DG1 ${it.dg1.size} bytes" +
-                            (it.dg2?.let { bytes -> " · DG2 ${bytes.size} bytes" } ?: "") +
-                            (it.sod?.let { bytes -> " · SOD ${bytes.size} bytes" } ?: "")
+                        chipSummary = buildString {
+                            appendLine("协议：${it.protocol}")
+                            it.fields.forEach { (label, value) -> appendLine("$label：$value") }
+                            append("数据组：${it.dataGroups.entries.joinToString { group -> "${group.key} ${group.value}B" }}")
+                            if ("DG12" !in it.dataGroups) append("\n未发现可访问的 DG12，芯片签注可能不使用标准 LDS DG12。")
+                        }
                         pendingNfcRequest = null
                     }
             }
@@ -115,9 +117,7 @@ private fun HomeScreen(onSelect: (DocumentType) -> Unit) {
 private fun DocumentScreen(type: DocumentType, nfcState: NfcReadState, chipSummary: String?, onArmNfc: (NfcReadRequest) -> Unit, onBack: () -> Unit) {
     var showCamera by remember { mutableStateOf(false) }
     var ocrText by remember { mutableStateOf("") }
-    var documentNumber by remember { mutableStateOf("") }
-    var birthDate by remember { mutableStateOf("") }
-    var expiryDate by remember { mutableStateOf("") }
+    var accessKey by remember { mutableStateOf<MrzAccessKey?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -128,9 +128,10 @@ private fun DocumentScreen(type: DocumentType, nfcState: NfcReadState, chipSumma
         CameraCaptureScreen(onRecognized = { text ->
             ocrText = text
             MrzParser.parseAccessKey(text).onSuccess { key ->
-                documentNumber = key.documentNumber; birthDate = key.birthDate; expiryDate = key.expiryDate
+                accessKey = key
             }
-            message = if (MrzParser.parseAccessKey(text).isSuccess) "MRZ 校验通过，已填入 NFC 密钥" else "已完成 OCR；未通过 TD1/TD3 校验，请人工校对"
+            if (MrzParser.parseAccessKey(text).isFailure) accessKey = null
+            message = if (accessKey != null) "机读码校验通过，可以直接读取芯片" else "机读码未通过 TD1/TD3 校验，请重新拍摄"
             showCamera = false
         }, onCancel = { showCamera = false }, onError = { message = it; showCamera = false })
         return
@@ -154,19 +155,18 @@ private fun DocumentScreen(type: DocumentType, nfcState: NfcReadState, chipSumma
             Card { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Lock, null); Spacer(Modifier.width(8.dp)); Text("2. 芯片读取", style = MaterialTheme.typography.titleMedium) }
                 if (type.nfcMode == NfcMode.EXPERIMENTAL_ICAO) Text("实验性 ICAO LDS 模式：失败不代表证件或芯片无效。", color = MaterialTheme.colorScheme.error)
-                AccessKeyField("证件号码", documentNumber) { documentNumber = it.uppercase() }
-                AccessKeyField("出生日期 YYMMDD", birthDate) { birthDate = it.filter(Char::isDigit).take(6) }
-                AccessKeyField("有效期 YYMMDD", expiryDate) { expiryDate = it.filter(Char::isDigit).take(6) }
-                Button(enabled = documentNumber.isNotBlank() && birthDate.length == 6 && expiryDate.length == 6,
-                    onClick = { onArmNfc(NfcReadRequest(type, MrzAccessKey(documentNumber, birthDate, expiryDate))) }) { Text("开始 NFC 读取") }
+                accessKey?.let { key ->
+                    Text("已从机读码读取：${key.documentNumber} · ${key.birthDate} · ${key.expiryDate}")
+                } ?: Text("请先拍摄并成功校验证件机读码。")
+                Button(enabled = accessKey != null,
+                    onClick = { accessKey?.let { onArmNfc(NfcReadRequest(type, it)) } }) { Text("开始 NFC 读取") }
                 Text(nfcState.message); nfcState.error?.let { Text("错误：$it", color = MaterialTheme.colorScheme.error) }
-                chipSummary?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                chipSummary?.let {
+                    HorizontalDivider()
+                    Text("芯片读取结果", style = MaterialTheme.typography.titleMedium)
+                    SelectionContainer { Text(it, color = MaterialTheme.colorScheme.primary) }
+                }
             } }
         }
     }
-}
-
-@Composable
-private fun AccessKeyField(label: String, value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
 }

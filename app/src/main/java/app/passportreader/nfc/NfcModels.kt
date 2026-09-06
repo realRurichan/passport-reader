@@ -26,4 +26,6 @@ data class ChipReadResult(
     val dg2: ByteArray?,
     val sod: ByteArray?,
     val protocol: String,
+    val fields: Map<String, String>,
+    val dataGroups: Map<String, Int>,
 )
