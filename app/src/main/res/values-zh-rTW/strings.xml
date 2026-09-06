@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">證件讀取器</string>
+    <string name="privacy_note">全部在本機處理，預設不儲存證件資料</string>
+</resources>
+

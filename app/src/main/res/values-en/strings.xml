@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Document Reader</string>
+    <string name="privacy_note">Processed on device; document data is not saved by default</string>
+</resources>
+
