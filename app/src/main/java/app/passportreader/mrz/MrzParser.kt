@@ -46,6 +46,29 @@ object MrzParser {
         return parseTd1(text)
     }
 
+    /** Chinese electronic Exit-Entry Permit: one 30-character line (CS...). */
+    fun parseSingleLinePermit(text: String): Result<MrzAccessKey> = runCatching {
+        val raw = text.lines().map(::normalizeOcrLine).firstOrNull { it.length in 27..34 }
+            ?: error("需要一行 30 字符的通行证机读码")
+        val line = normalizeSingleLinePermit(raw.take(30).padEnd(30, '<'))
+        require(line.startsWith("CS")) { "机读码证件标识不是 CS" }
+        val documentNumber = line.substring(2, 11)
+        val expiryDate = line.substring(13, 19)
+        val birthDate = line.substring(21, 27)
+        require(valid(documentNumber, line[11])) { "证件号码校验位错误" }
+        require(valid(expiryDate, line[19])) { "有效期校验位错误" }
+        require(valid(birthDate, line[27])) { "出生日期校验位错误" }
+        val composite = line.substring(2, 12) + line.substring(13, 20) + line.substring(21, 28)
+        require(valid(composite, line[29])) { "总校验位错误" }
+        MrzAccessKey(documentNumber.replace("<", ""), birthDate, expiryDate)
+    }
+
+    fun singleLineDiagnosis(text: String): String {
+        val error = parseSingleLinePermit(text).exceptionOrNull()?.message ?: "单行码通过"
+        val lengths = text.lines().map(::normalizeOcrLine).filter(String::isNotBlank).map(String::length)
+        return "$error；识别行长度=${lengths.joinToString()}"
+    }
+
     fun diagnosis(text: String): String {
         val td3 = parseTd3(text).exceptionOrNull()?.message ?: "TD3 通过"
         val td1 = parseTd1(text).exceptionOrNull()?.message ?: "TD1 通过"
@@ -93,6 +116,12 @@ object MrzParser {
     private fun normalizeTd1DateLine(line: String): String {
         val chars = line.toCharArray()
         ((0..6) + (8..14)).forEach { if (it < chars.size) chars[it] = ocrDigit(chars[it]) }
+        return chars.concatToString()
+    }
+
+    private fun normalizeSingleLinePermit(line: String): String {
+        val chars = line.toCharArray()
+        ((13..19) + (21..27) + listOf(11, 29)).forEach { if (it < chars.size) chars[it] = ocrDigit(chars[it]) }
         return chars.concatToString()
     }
 

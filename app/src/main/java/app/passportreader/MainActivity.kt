@@ -125,14 +125,15 @@ private fun DocumentScreen(type: DocumentType, nfcState: NfcReadState, chipSumma
         if (!it) message = "相机权限被拒绝"
     }
     if (showCamera) {
-        CameraCaptureScreen(onRecognized = { text ->
+        CameraCaptureScreen(singleLineMrz = type == DocumentType.HK_MACAO_PERMIT, onRecognized = { text ->
             ocrText = text
-            MrzParser.parseAccessKey(text).onSuccess { key ->
+            val parsedKey = if (type == DocumentType.HK_MACAO_PERMIT) MrzParser.parseSingleLinePermit(text) else MrzParser.parseAccessKey(text)
+            parsedKey.onSuccess { key ->
                 accessKey = key
             }
-            if (MrzParser.parseAccessKey(text).isFailure) accessKey = null
+            if (parsedKey.isFailure) accessKey = null
             message = if (accessKey != null) "机读码校验通过，可以直接读取芯片"
-            else "机读码校验失败：${MrzParser.diagnosis(text)}"
+            else "机读码校验失败：${if (type == DocumentType.HK_MACAO_PERMIT) MrzParser.singleLineDiagnosis(text) else MrzParser.diagnosis(text)}"
             showCamera = false
         }, onCancel = { showCamera = false }, onError = { message = it; showCamera = false })
         return

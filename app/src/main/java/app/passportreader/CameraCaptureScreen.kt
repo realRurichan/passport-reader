@@ -29,7 +29,7 @@ import java.io.File
 import kotlinx.coroutines.launch
 
 @Composable
-fun CameraCaptureScreen(onRecognized: (String) -> Unit, onCancel: () -> Unit, onError: (String) -> Unit) {
+fun CameraCaptureScreen(singleLineMrz: Boolean, onRecognized: (String) -> Unit, onCancel: () -> Unit, onError: (String) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -62,11 +62,11 @@ fun CameraCaptureScreen(onRecognized: (String) -> Unit, onCancel: () -> Unit, on
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.34f)
+                    .fillMaxHeight(if (singleLineMrz) 0.16f else 0.34f)
                     .align(Alignment.BottomCenter)
                     .border(2.dp, Color(0xFFFFD166), RectangleShape)
             )
-            Text("将证件边缘对齐绿色框\n机读码放入黄色区域", color = Color.White, modifier = Modifier.align(Alignment.TopCenter).padding(10.dp))
+            Text("将证件边缘对齐绿色框\n${if (singleLineMrz) "单行机读码" else "机读码"}放入黄色区域", color = Color.White, modifier = Modifier.align(Alignment.TopCenter).padding(10.dp))
         }
         TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) { Text("取消", color = Color.White) }
         Card(Modifier.align(Alignment.BottomCenter).padding(20.dp)) { Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {

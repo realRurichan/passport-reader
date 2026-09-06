@@ -29,4 +29,16 @@ class MrzParserTest {
         assertEquals("740812", key.birthDate)
         assertEquals("120415", key.expiryDate)
     }
+
+    @Test fun parsesChineseSingleLinePermit() {
+        val number = "C12345678"
+        val expiry = "301231"
+        val birth = "900101"
+        val body = number + MrzParser.checkDigit(number) + "<" + expiry + MrzParser.checkDigit(expiry) + "<" + birth + MrzParser.checkDigit(birth)
+        val line = "CS$body<${MrzParser.checkDigit(body.replace("<", ""))}"
+        val key = MrzParser.parseSingleLinePermit(line).getOrThrow()
+        assertEquals(number, key.documentNumber)
+        assertEquals(expiry, key.expiryDate)
+        assertEquals(birth, key.birthDate)
+    }
 }
